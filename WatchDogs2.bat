@@ -10,19 +10,42 @@ start "" %UC_LAUNCH%
 
 :: Wait for upc.exe to exist
 echo Waiting for upc.exe...
+set /a upc_wait=0
+
 :wait_upc
 tasklist | find /i "upc.exe" >nul
 if errorlevel 1 (
+    set /a upc_wait+=1
+    if %upc_wait% GTR 15 (
+        echo.
+        echo Error Code: LNF001UC
+        echo Ubisoft Connect (upc.exe) could not be found.
+        echo Copy this and contact ContentApple on GitHub.
+        echo.
+        pause
+        exit /b
+    )
     timeout /t 1 >nul
     goto wait_upc
 )
 
 echo Ubisoft Connect is running.
 
+:: Check if WD2 exists before launching
+if not exist %WD2_EXE% (
+    echo.
+    echo Error Code: LNF002WD2
+    echo Watch Dogs 2 executable not found at:
+    echo %WD2_EXE%
+    echo Copy this and contact the developer on GitHub: Contentapple
+    echo.
+    pause
+    exit /b
+)
+
 echo Launching Watch Dogs 2...
 start "" %WD2_EXE%
 
-:: Now we spam‑focus the UC window for a short window of time
 echo Forcing Ubisoft Connect to foreground for handshake...
 set /a tries=0
 
@@ -30,14 +53,12 @@ set /a tries=0
 set /a tries+=1
 if %tries% GTR 20 goto done_focus
 
-:: Try to bring the "Ubisoft Connect" window to front
 powershell -command "(New-Object -ComObject WScript.Shell).AppActivate('Ubisoft Connect')" 2>nul
 
-:: Small delay between focus attempts
 timeout /t 1 >nul
 goto focus_loop
 
 :done_focus
-echo Ubisoft Connect has been open long enough, enjoy your game!
+echo UPC has finished focusing.
 endlocal
 exit /b
