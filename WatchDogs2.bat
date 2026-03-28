@@ -1,64 +1,71 @@
 @echo off
-setlocal
+setlocal EnableDelayedExpansion
 
 :: Paths
-set UC_LAUNCH="C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\UbisoftConnect.exe"
-set WD2_EXE="C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games\WATCH_DOGS2\bin_plus\WatchDogs2.exe"
+set "UC_LAUNCH=C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\UbisoftConnect.exe"
+set "WD2_EXE=C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games\WATCH_DOGS2\bin_plus\WatchDogs2.exe"
 
-echo Starting Ubisoft Connect...
-start "" %UC_LAUNCH%
+echo ============================================
+echo   WatchDogs2 Launcher - Debug Mode
+echo ============================================
+echo.
 
-:: Wait for upc.exe to exist
-echo Waiting for upc.exe...
-set /a upc_wait=0
+:: Check if Ubisoft Connect is already running
+echo Checking if Ubisoft Connect is already running...
+set "UC_WAS_RUNNING=0"
+tasklist /FI "IMAGENAME eq upc.exe" 2>nul | find /i "upc.exe" >nul && set "UC_WAS_RUNNING=1"
 
-:wait_upc
-tasklist | find /i "upc.exe" >nul
-if errorlevel 1 (
-    set /a upc_wait+=1
-    if %upc_wait% GTR 15 (
-        echo.
-        echo Error Code: LNF001UC
-        echo Ubisoft Connect (upc.exe) could not be found.
-        echo Copy this and contact ContentApple on GitHub.
-        echo.
-        pause
-        exit /b
-    )
-    timeout /t 1 >nul
-    goto wait_upc
+if "!UC_WAS_RUNNING!"=="1" (
+    echo [INFO] Ubisoft Connect is already running.
+) else (
+    echo [INFO] Ubisoft Connect not running. Launching it now...
+    start "" "!UC_LAUNCH!"
+    call :wait_for_process "upc.exe"
+    echo [INFO] Waiting 10 seconds for Ubisoft Connect to initialize...
+    timeout /t 10 /nobreak >nul
 )
 
-echo Ubisoft Connect is running.
+echo.
+echo [INFO] Launching Watch Dogs 2...
+start "" "!WD2_EXE!"
 
-:: Check if WD2 exists before launching
-if not exist %WD2_EXE% (
-    echo.
-    echo Error Code: LNF002WD2
-    echo Watch Dogs 2 executable not found at:
-    echo %WD2_EXE%
-    echo Copy this and contact the developer on GitHub: Contentapple
-    echo.
-    pause
-    exit /b
-)
+echo [INFO] Waiting for Watch Dogs 2 process to start...
+call :wait_for_process "WatchDogs2.exe"
 
-echo Launching Watch Dogs 2...
-start "" %WD2_EXE%
+:: Give WD2 time to reach the splash screen
+echo [INFO] Waiting 5 seconds for splash screen...
+timeout /t 5 /nobreak >nul
 
-echo Forcing Ubisoft Connect to foreground for handshake...
-set /a tries=0
+echo.
+echo [INFO] WD2 splash should be visible now.
+echo [INFO] Keeping Ubisoft Connect in foreground for 20 seconds...
+
+set "FOCUS_COUNT=0"
 
 :focus_loop
-set /a tries+=1
-if %tries% GTR 20 goto done_focus
+set /a FOCUS_COUNT+=1
+powershell -NoProfile -Command "(New-Object -ComObject WScript.Shell).AppActivate('Ubisoft Connect')" >nul 2>&1
+echo [FOCUS] Attempt !FOCUS_COUNT! of 20
+timeout /t 1 /nobreak >nul
+if !FOCUS_COUNT! LSS 20 goto focus_loop
 
-powershell -command "(New-Object -ComObject WScript.Shell).AppActivate('Ubisoft Connect')" 2>nul
-
-timeout /t 1 >nul
-goto focus_loop
-
-:done_focus
-echo UPC has finished focusing.
+echo.
+echo ============================================
+echo   Handshake complete. Enjoy the game!
+echo ============================================
+echo.
+echo Press any key to close this window...
+pause >nul
 endlocal
 exit /b
+
+:wait_for_process
+echo [WAIT] Waiting for %~1...
+:wait_loop
+tasklist /FI "IMAGENAME eq %~1" 2>nul | find /i "%~1" >nul
+if errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto wait_loop
+)
+echo [WAIT] %~1 is now running.
+goto :eof
